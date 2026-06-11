@@ -49,6 +49,14 @@ function formatTime(date) {
   return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
 
+function formatAge(seconds) {
+  if (seconds == null) return '未知';
+  if (seconds < 60) return `${seconds}秒前`;
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}分钟前`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}小时前`;
+  return `${Math.floor(seconds / 86400)}天前`;
+}
+
 // === Sparkline Renderer ===
 
 function drawSparkline(canvasId, prices, isUp) {
@@ -192,6 +200,28 @@ function updateCard(indexDef, data) {
   if (volEl && data.volume) {
     volEl.textContent = `Vol ${formatVolume(data.volume)}`;
   }
+
+  // Data freshness indicator
+  const freshEl = document.getElementById(`fresh-${key}`);
+  if (freshEl) {
+    if (data.marketTime) {
+      const dataDate = new Date(data.marketTime * 1000);
+      const ageStr = formatAge(data.dataAgeSec);
+      const timeStr = dataDate.toLocaleString('zh-CN', {
+        month: 'numeric', day: 'numeric',
+        hour: '2-digit', minute: '2-digit',
+        timeZoneName: 'short'
+      });
+      freshEl.textContent = `数据时间: ${timeStr} (${ageStr})`;
+      freshEl.className = 'data-freshness' + (data.isStale ? ' stale' : '');
+    } else {
+      freshEl.textContent = '';
+      freshEl.className = 'data-freshness';
+    }
+  }
+
+  // Stale warning on card
+  card.classList.toggle('stale-data', !!data.isStale);
 }
 
 function updateMarketState(data) {
@@ -228,6 +258,22 @@ async function refresh() {
     updateMarketState(data);
     if (lastUpdateEl) {
       lastUpdateEl.textContent = `更新于 ${formatTime(new Date())}`;
+    }
+
+    // Check overall data freshness and show warning banner
+    const staleItems = INDICES.filter(idx => {
+      const d = data[idx.symbol];
+      return d && d.isStale;
+    });
+    const bannerEl = document.getElementById('stale-banner');
+    if (bannerEl) {
+      if (staleItems.length > 0) {
+        const names = staleItems.map(i => i.name).join('、');
+        bannerEl.textContent = `⚠️ 数据可能不是最新: ${names}`;
+        bannerEl.style.display = 'block';
+      } else {
+        bannerEl.style.display = 'none';
+      }
     }
   }
 

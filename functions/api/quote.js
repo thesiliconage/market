@@ -62,6 +62,17 @@ export async function onRequestGet(context) {
         const change = currentPrice - previousClose;
         const changePercent = previousClose ? (change / previousClose) * 100 : 0;
 
+        // Data freshness: when did Yahoo update this quote?
+        const marketTime = meta.regularMarketTime || null; // Unix timestamp
+        const fetchTime = Math.floor(Date.now() / 1000);
+        const dataAgeSec = marketTime ? fetchTime - marketTime : null;
+
+        // Staleness threshold: warn if data is older than 15 min for open markets,
+        // or older than 24h for closed markets
+        const isOpen = meta.marketState === 'REGULAR' || meta.marketState === 'PRE' || meta.marketState === 'POST';
+        const staleThreshold = isOpen ? 900 : 86400; // 15min or 24h
+        const isStale = dataAgeSec !== null && dataAgeSec > staleThreshold;
+
         return {
           symbol,
           shortName: meta.shortName || symbol,
@@ -76,6 +87,10 @@ export async function onRequestGet(context) {
           volume: meta.regularMarketVolume || null,
           marketState: meta.marketState || 'UNKNOWN',
           prices: prices.map(p => p.c), // Just close prices for sparkline
+          marketTime,       // Unix timestamp of the data
+          fetchTime,        // Unix timestamp of when we fetched
+          dataAgeSec,       // How old the data is in seconds
+          isStale,          // Whether data is considered stale
         };
       } catch (e) {
         return { symbol, error: e.message };
