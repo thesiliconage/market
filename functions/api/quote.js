@@ -47,11 +47,20 @@ export async function onRequestGet(context) {
 
         // Current price info
         const currentPrice = meta.regularMarketPrice;
-        const previousClose = meta.chartPreviousClose || meta.previousClose;
+
+        // Use the second-to-last valid close as "previous close" for accurate daily change.
+        // chartPreviousClose is unreliable with range>1d (it returns the close before the range, not yesterday).
+        const validCloses = closes.filter(c => c !== null);
+        let previousClose;
+        if (validCloses.length >= 2) {
+          previousClose = validCloses[validCloses.length - 2];
+        } else {
+          previousClose = meta.chartPreviousClose || meta.previousClose;
+        }
 
         // Calculate change
         const change = currentPrice - previousClose;
-        const changePercent = (change / previousClose) * 100;
+        const changePercent = previousClose ? (change / previousClose) * 100 : 0;
 
         return {
           symbol,
